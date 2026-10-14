@@ -2,7 +2,7 @@ from http import HTTPStatus
 from uuid import UUID
 
 from dishka.integrations.fastapi import DishkaRoute, FromDishka
-from fastapi import APIRouter, Query, Request
+from fastapi import APIRouter, Query
 
 from app.application.exceptions import EmptyPayloadException
 from app.domain.entities.user import (
@@ -22,7 +22,6 @@ from app.presenters.rest.routers.api.v1.schemas.user import (
     UserListSchema,
     UserSchema,
 )
-from app.presenters.rest.schemas import reject_duplicate_pagination_params
 
 router = APIRouter(prefix="/users", tags=["Users"], route_class=DishkaRoute)
 
@@ -66,12 +65,10 @@ async def get_by_id(
     name="Get User List",
 )
 async def get_list(
-    request: Request,
     params: UserListParamsSchema = Query(),
     *,
     use_case: FromDishka[GetUserListUC],
 ) -> UserListSchema:
-    reject_duplicate_pagination_params(request)
     return UserListSchema.model_validate(
         await use_case.execute(
             input_dto=UserListParams(**params.model_dump()),

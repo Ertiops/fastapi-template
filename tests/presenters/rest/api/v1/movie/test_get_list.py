@@ -1,6 +1,6 @@
 from collections.abc import Awaitable, Callable
 from http import HTTPStatus
-from uuid import UUID, uuid7
+from uuid import UUID
 
 import pytest
 from dirty_equals import IsStr
@@ -31,17 +31,12 @@ async def test__get_list__unprocessable_entity(
     assert response.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
 
 
-@pytest.mark.parametrize("field", ["limit", "after"])
-async def test__get_list__duplicate_query_key(client: AsyncClient, field: str) -> None:
-    value = "10" if field == "limit" else str(uuid7())
-    response = await client.get(API_URL, params=[(field, value), (field, value)])
-    assert response.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
-
-
 async def test__get_list__ok__status(client: AsyncClient) -> None:
     response = await client.get(API_URL)
-    assert response.status_code == HTTPStatus.OK
-    assert response.json() == {"items": [], "next_cursor": None}
+    assert (response.status_code, response.json()) == (
+        HTTPStatus.OK,
+        {"items": [], "next_cursor": None},
+    )
 
 
 async def test__get_list__ok__format(
@@ -76,9 +71,11 @@ async def test__get_list__validate_limit(
 ) -> None:
     db_movies = [await create_movie(id=UUID(int=i + 1)) for i in range(3)]
     response = await client.get(API_URL, params={"limit": 1})
-    assert response.status_code == HTTPStatus.OK
-    assert [item["id"] for item in response.json()["items"]] == [str(db_movies[-1].id)]
-    assert response.json()["next_cursor"] == str(db_movies[-1].id)
+    assert (
+        response.status_code,
+        [item["id"] for item in response.json()["items"]],
+        response.json()["next_cursor"],
+    ) == (HTTPStatus.OK, [str(db_movies[-1].id)], str(db_movies[-1].id))
 
 
 async def test__get_list__validate_after(
@@ -87,11 +84,10 @@ async def test__get_list__validate_after(
 ) -> None:
     db_movies = [await create_movie(id=UUID(int=i + 1)) for i in range(3)]
     response = await client.get(API_URL, params={"after": str(db_movies[-1].id)})
-    assert [item["id"] for item in response.json()["items"]] == [
-        str(db_movies[1].id),
-        str(db_movies[0].id),
-    ]
-    assert response.json()["next_cursor"] is None
+    assert (
+        [item["id"] for item in response.json()["items"]],
+        response.json()["next_cursor"],
+    ) == ([str(db_movies[1].id), str(db_movies[0].id)], None)
 
 
 async def test__get_list__last_full_page(
@@ -101,8 +97,10 @@ async def test__get_list__last_full_page(
     await create_movie()
     await create_movie()
     response = await client.get(API_URL, params={"limit": 2})
-    assert len(response.json()["items"]) == 2
-    assert response.json()["next_cursor"] is None
+    assert (len(response.json()["items"]), response.json()["next_cursor"]) == (
+        2,
+        None,
+    )
 
 
 async def test__get_list__absent_anchor(
@@ -111,5 +109,7 @@ async def test__get_list__absent_anchor(
 ) -> None:
     await create_movie(id=UUID(int=7))
     response = await client.get(API_URL, params={"after": str(UUID(int=9))})
-    assert response.status_code == HTTPStatus.OK
-    assert [item["id"] for item in response.json()["items"]] == [str(UUID(int=7))]
+    assert (
+        response.status_code,
+        [item["id"] for item in response.json()["items"]],
+    ) == (HTTPStatus.OK, [str(UUID(int=7))])

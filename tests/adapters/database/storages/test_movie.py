@@ -102,7 +102,6 @@ async def test__get_list(
 ) -> None:
     db_movies = [await create_movie(id=UUID(int=i + 1)) for i in range(3)]
     movies = await movie_storage.get_list(input_dto=MovieListParams(limit=2))
-    # Storage fetches one extra row to detect whether another page exists.
     assert [x.id for x in movies] == [row.id for row in reversed(db_movies)]
 
 

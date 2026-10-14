@@ -85,7 +85,7 @@ When there is a subsequent page, `next_cursor` is the **last returned record's U
 
 Both collections are ordered `id DESC`, and database queries use `WHERE id < :after ORDER BY id DESC LIMIT limit+1` while excluding soft-deleted rows. UUIDv7 generally follows generation time but is not a strict global creation-time guarantee across servers.
 
-Any syntactically valid UUID is an acceptable cursor boundary, even when the corresponding row is absent or deleted. Malformed UUIDs, out-of-range limits, `offset`, unknown query names, and duplicated `limit`/`after` parameters return **HTTP 422**.
+Any syntactically valid UUID is an acceptable cursor boundary, even when the corresponding row is absent or deleted. Malformed UUIDs, out-of-range limits, `offset`, and unknown query names return **HTTP 422**.
 
 Cursor pagination does **not** guarantee a transaction-wide snapshot across multiple HTTP requests. On a static data set, repeated traversal has no duplicates or skips; concurrent inserts/deletes may affect later pages.
 

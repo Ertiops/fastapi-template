@@ -1,9 +1,11 @@
 from collections.abc import Awaitable, Callable
 from uuid import UUID
 
+import pytest
+
 from app.adapters.database.tables import UserTable
 from app.domain.entities.common import ItemList
-from app.domain.entities.user import UserListParams
+from app.domain.entities.user import User, UserListParams
 from app.domain.use_cases.user.get_list import GetUserListUC
 
 
@@ -13,40 +15,57 @@ async def test__get_list(
 ) -> None:
     db_users = [await create_user(id=UUID(int=i + 1)) for i in range(3)]
     result = await get_user_list_uc.execute(input_dto=UserListParams(limit=10))
-    assert isinstance(result, ItemList)
-    assert [user.id for user in result.items] == [row.id for row in reversed(db_users)]
-    assert result.next_cursor is None
+    assert result == ItemList(
+        items=[
+            User(
+                id=db_user.id,
+                username=db_user.username,
+                email=db_user.email,
+                created_at=db_user.created_at,
+                updated_at=db_user.updated_at,
+            )
+            for db_user in reversed(db_users)
+        ],
+        next_cursor=None,
+    )
 
 
+@pytest.mark.parametrize(
+    ("after", "expected_id", "expected_cursor"),
+    [
+        (None, UUID(int=3), UUID(int=3)),
+        (UUID(int=3), UUID(int=2), UUID(int=2)),
+        (UUID(int=2), UUID(int=1), None),
+    ],
+)
 async def test__get_list__limit_and_cursor(
     get_user_list_uc: GetUserListUC,
     create_user: Callable[..., Awaitable[UserTable]],
+    after: UUID | None,
+    expected_id: UUID,
+    expected_cursor: UUID | None,
 ) -> None:
-    db_users = [await create_user(id=UUID(int=i + 1)) for i in range(3)]
-    first = await get_user_list_uc.execute(input_dto=UserListParams(limit=1))
-    assert [user.id for user in first.items] == [db_users[-1].id]
-    assert first.next_cursor == db_users[-1].id
-    second = await get_user_list_uc.execute(
-        input_dto=UserListParams(limit=1, after=first.next_cursor)
+    for value in (1, 2, 3):
+        await create_user(id=UUID(int=value))
+    result = await get_user_list_uc.execute(
+        input_dto=UserListParams(limit=1, after=after)
     )
-    assert [user.id for user in second.items] == [db_users[-2].id]
-    assert second.next_cursor == db_users[-2].id
-    last = await get_user_list_uc.execute(
-        input_dto=UserListParams(limit=1, after=second.next_cursor)
+    assert ([user.id for user in result.items], result.next_cursor) == (
+        [expected_id],
+        expected_cursor,
     )
-    assert [user.id for user in last.items] == [db_users[0].id]
-    assert last.next_cursor is None
 
 
 async def test__get_list__exactly_full_last_page(
     get_user_list_uc: GetUserListUC,
     create_user: Callable[..., Awaitable[UserTable]],
 ) -> None:
-    await create_user()
-    await create_user()
+    db_users = [await create_user(id=UUID(int=i + 1)) for i in range(2)]
     result = await get_user_list_uc.execute(input_dto=UserListParams(limit=2))
-    assert len(result.items) == 2
-    assert result.next_cursor is None
+    assert ([user.id for user in result.items], result.next_cursor) == (
+        [user.id for user in reversed(db_users)],
+        None,
+    )
 
 
 async def test__get_list__empty_list(get_user_list_uc: GetUserListUC) -> None:
@@ -62,5 +81,7 @@ async def test__get_list__absent_anchor(
     result = await get_user_list_uc.execute(
         input_dto=UserListParams(limit=10, after=UUID(int=8))
     )
-    assert [user.id for user in result.items] == [UUID(int=5)]
-    assert result.next_cursor is None
+    assert ([user.id for user in result.items], result.next_cursor) == (
+        [UUID(int=5)],
+        None,
+    )

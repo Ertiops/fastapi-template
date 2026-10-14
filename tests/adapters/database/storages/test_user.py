@@ -97,7 +97,6 @@ async def test__get_list(
 ) -> None:
     db_users = [await create_user(id=UUID(int=i + 1)) for i in range(3)]
     users = await user_storage.get_list(input_dto=UserListParams(limit=2))
-    # Storage fetches one extra row to detect whether another page exists.
     assert [x.id for x in users] == [row.id for row in reversed(db_users)]
 
 

@@ -2,7 +2,7 @@ from http import HTTPStatus
 from uuid import UUID
 
 from dishka.integrations.fastapi import DishkaRoute, FromDishka
-from fastapi import APIRouter, Query, Request
+from fastapi import APIRouter, Query
 
 from app.application.exceptions import EmptyPayloadException
 from app.domain.entities.movie import (
@@ -22,7 +22,6 @@ from app.presenters.rest.routers.api.v1.schemas.movie import (
     MovieSchema,
     UpdateMovieSchema,
 )
-from app.presenters.rest.schemas import reject_duplicate_pagination_params
 
 router = APIRouter(prefix="/movies", tags=["Movies"], route_class=DishkaRoute)
 
@@ -64,12 +63,10 @@ async def get_by_id(
     name="Get Movie List",
 )
 async def get_list(
-    request: Request,
     params: MovieListParamsSchema = Query(),
     *,
     use_case: FromDishka[GetMovieListUC],
 ) -> MovieListSchema:
-    reject_duplicate_pagination_params(request)
     return MovieListSchema.model_validate(
         await use_case.execute(input_dto=MovieListParams(**params.model_dump()))
     )
