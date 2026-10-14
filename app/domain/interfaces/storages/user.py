@@ -20,9 +20,6 @@ class IUserStorage(Protocol):
     async def get_list(self, *, input_dto: UserListParams) -> Sequence[User]:
         pass
 
-    async def count(self, *, input_dto: UserListParams) -> int:
-        pass
-
     async def exists_by_id(self, *, input_dto: UUID) -> bool:
         pass
 

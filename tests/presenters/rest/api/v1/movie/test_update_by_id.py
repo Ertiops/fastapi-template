@@ -1,12 +1,11 @@
 from collections.abc import Awaitable, Callable, Mapping
 from http import HTTPStatus
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid7
 
 import pytest
 from dirty_equals import IsStr
 from httpx import AsyncClient
-from uuid6 import uuid7
 
 from app.adapters.database.tables import MovieTable
 from app.domain.entities.movie import MovieGenre

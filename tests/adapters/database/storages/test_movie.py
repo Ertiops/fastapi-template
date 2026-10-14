@@ -1,9 +1,8 @@
 from collections.abc import Awaitable, Callable
-from uuid import UUID
+from uuid import UUID, uuid7
 
 import pytest
 from dirty_equals import IsDatetime, IsUUID
-from uuid6 import uuid7
 
 from app.adapters.database.storages.movie import MovieStorage
 from app.adapters.database.tables import MovieTable
@@ -101,94 +100,36 @@ async def test__get_list(
     movie_storage: MovieStorage,
     create_movie: Callable[..., Awaitable[MovieTable]],
 ) -> None:
-    db_movies = [await create_movie(id=UUID(int=i + 1)) for i in range(2)]
-    movies = await movie_storage.get_list(input_dto=MovieListParams(limit=10, offset=0))
-    assert movies == [
-        Movie(
-            id=db_movie.id,
-            title=db_movie.title,
-            description=db_movie.description,
-            year=db_movie.year,
-            director=db_movie.director,
-            genre=db_movie.genre,
-            duration_minutes=db_movie.duration_minutes,
-            rating=db_movie.rating,
-            created_at=db_movie.created_at,
-            updated_at=db_movie.updated_at,
-        )
-        for db_movie in db_movies
-    ]
+    db_movies = [await create_movie(id=UUID(int=i + 1)) for i in range(3)]
+    movies = await movie_storage.get_list(input_dto=MovieListParams(limit=2))
+    # Storage fetches one extra row to detect whether another page exists.
+    assert [x.id for x in movies] == [row.id for row in reversed(db_movies)]
 
 
-async def test__get_list__validate_limit(
+async def test__get_list__after(
     movie_storage: MovieStorage,
     create_movie: Callable[..., Awaitable[MovieTable]],
 ) -> None:
-    db_movies = [await create_movie(id=UUID(int=i + 1)) for i in range(2)]
-    assert await movie_storage.get_list(
-        input_dto=MovieListParams(limit=1, offset=0)
-    ) == [
-        Movie(
-            id=db_movies[0].id,
-            title=db_movies[0].title,
-            description=db_movies[0].description,
-            year=db_movies[0].year,
-            director=db_movies[0].director,
-            genre=db_movies[0].genre,
-            duration_minutes=db_movies[0].duration_minutes,
-            rating=db_movies[0].rating,
-            created_at=db_movies[0].created_at,
-            updated_at=db_movies[0].updated_at,
-        )
-    ]
-
-
-async def test__get_list__validate_offset(
-    movie_storage: MovieStorage,
-    create_movie: Callable[..., Awaitable[MovieTable]],
-) -> None:
-    db_movies: list[MovieTable] = [
-        await create_movie(id=UUID(int=i + 1)) for i in range(2)
-    ]
-    assert await movie_storage.get_list(
-        input_dto=MovieListParams(limit=2, offset=1)
-    ) == [
-        Movie(
-            id=db_movies[1].id,
-            title=db_movies[1].title,
-            description=db_movies[1].description,
-            year=db_movies[1].year,
-            director=db_movies[1].director,
-            genre=db_movies[1].genre,
-            duration_minutes=db_movies[1].duration_minutes,
-            rating=db_movies[1].rating,
-            created_at=db_movies[1].created_at,
-            updated_at=db_movies[1].updated_at,
-        )
-    ]
-
-
-async def test__get_list__empty_list(
-    movie_storage: MovieStorage,
-) -> None:
-    db_movies = await movie_storage.get_list(
-        input_dto=MovieListParams(limit=10, offset=0)
+    db_movies = [await create_movie(id=UUID(int=i + 1)) for i in range(3)]
+    movies = await movie_storage.get_list(
+        input_dto=MovieListParams(limit=1, after=db_movies[-1].id)
     )
-    assert db_movies == []
+    assert [x.id for x in movies] == [db_movies[1].id, db_movies[0].id]
 
 
-async def test__count(
+async def test__get_list__deleted(
     movie_storage: MovieStorage,
     create_movie: Callable[..., Awaitable[MovieTable]],
 ) -> None:
-    await create_movie()
-    assert await movie_storage.count(input_dto=MovieListParams(limit=10, offset=0)) == 1
+    await create_movie(id=UUID(int=3), deleted_at=now_utc())
+    await create_movie(id=UUID(int=2))
+    movies = await movie_storage.get_list(input_dto=MovieListParams(limit=10))
+    assert [x.id for x in movies] == [UUID(int=2)]
 
 
-async def test__count__zero(
-    movie_storage: MovieStorage,
-) -> None:
-    assert await movie_storage.count(input_dto=MovieListParams(limit=10, offset=0)) == 0
+async def test__get_list__empty_list(movie_storage: MovieStorage) -> None:
+    movies = await movie_storage.get_list(input_dto=MovieListParams(limit=10))
+    assert movies == []
 
 
 async def test__exists_by_id(

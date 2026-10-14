@@ -1,8 +1,8 @@
 from collections.abc import Awaitable, Callable
+from uuid import UUID, uuid7
 
 import pytest
 from dirty_equals import IsDatetime, IsUUID
-from uuid6 import uuid7
 
 from app.adapters.database.storages.user import UserStorage
 from app.adapters.database.tables import UserTable
@@ -95,75 +95,36 @@ async def test__get_list(
     user_storage: UserStorage,
     create_user: Callable[..., Awaitable[UserTable]],
 ) -> None:
-    db_users = [await create_user() for _ in range(2)]
-    users = await user_storage.get_list(input_dto=UserListParams(limit=10, offset=0))
-    assert users == [
-        User(
-            id=db_user.id,
-            username=db_user.username,
-            email=db_user.email,
-            created_at=db_user.created_at,
-            updated_at=db_user.updated_at,
-        )
-        for db_user in db_users
-    ]
+    db_users = [await create_user(id=UUID(int=i + 1)) for i in range(3)]
+    users = await user_storage.get_list(input_dto=UserListParams(limit=2))
+    # Storage fetches one extra row to detect whether another page exists.
+    assert [x.id for x in users] == [row.id for row in reversed(db_users)]
 
 
-async def test__get_list__validate_limit(
+async def test__get_list__after(
     user_storage: UserStorage,
     create_user: Callable[..., Awaitable[UserTable]],
 ) -> None:
-    db_user = await create_user()
-    await create_user()
-    users = await user_storage.get_list(input_dto=UserListParams(limit=1, offset=0))
-    assert users == [
-        User(
-            id=db_user.id,
-            username=db_user.username,
-            email=db_user.email,
-            created_at=db_user.created_at,
-            updated_at=db_user.updated_at,
-        )
-    ]
+    db_users = [await create_user(id=UUID(int=i + 1)) for i in range(3)]
+    users = await user_storage.get_list(
+        input_dto=UserListParams(limit=1, after=db_users[-1].id)
+    )
+    assert [x.id for x in users] == [db_users[1].id, db_users[0].id]
 
 
-async def test__get_list__validate_offset(
+async def test__get_list__deleted(
     user_storage: UserStorage,
     create_user: Callable[..., Awaitable[UserTable]],
 ) -> None:
-    await create_user()
-    db_user = await create_user()
-    users = await user_storage.get_list(input_dto=UserListParams(limit=10, offset=1))
-    assert users == [
-        User(
-            id=db_user.id,
-            username=db_user.username,
-            email=db_user.email,
-            created_at=db_user.created_at,
-            updated_at=db_user.updated_at,
-        )
-    ]
+    await create_user(id=UUID(int=3), deleted_at=now_utc())
+    await create_user(id=UUID(int=2))
+    users = await user_storage.get_list(input_dto=UserListParams(limit=10))
+    assert [x.id for x in users] == [UUID(int=2)]
 
 
-async def test__get_list__empty_list(
-    user_storage: UserStorage,
-) -> None:
-    users = await user_storage.get_list(input_dto=UserListParams(limit=10, offset=0))
+async def test__get_list__empty_list(user_storage: UserStorage) -> None:
+    users = await user_storage.get_list(input_dto=UserListParams(limit=10))
     assert users == []
-
-
-async def test__count(
-    user_storage: UserStorage,
-    create_user: Callable[..., Awaitable[UserTable]],
-) -> None:
-    await create_user()
-    assert await user_storage.count(input_dto=UserListParams(limit=10, offset=0)) == 1
-
-
-async def test__count__zero(
-    user_storage: UserStorage,
-) -> None:
-    assert await user_storage.count(input_dto=UserListParams(limit=10, offset=0)) == 0
 
 
 async def test__exists_by_id(

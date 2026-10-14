@@ -2,7 +2,7 @@ from collections.abc import Sequence
 from typing import NoReturn
 from uuid import UUID
 
-from sqlalchemy import exists, func, insert, select, update
+from sqlalchemy import exists, insert, select, update
 from sqlalchemy.exc import DBAPIError, IntegrityError, NoResultFound
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -44,23 +44,12 @@ class MovieStorage(IMovieStorage):
         return convert_movie(result=result) if result else None
 
     async def get_list(self, *, input_dto: MovieListParams) -> Sequence[Movie]:
-        stmt = (
-            select(MovieTable)
-            .where(MovieTable.deleted_at.is_(None))
-            .limit(input_dto.limit)
-            .offset(input_dto.offset)
-            .order_by(MovieTable.id)
-        )
+        stmt = select(MovieTable).where(MovieTable.deleted_at.is_(None))
+        if input_dto.after is not None:
+            stmt = stmt.where(MovieTable.id < input_dto.after)
+        stmt = stmt.order_by(MovieTable.id.desc()).limit(input_dto.limit + 1)
         result = await self.__session.scalars(stmt)
         return [convert_movie(result=r) for r in result]
-
-    async def count(self, *, input_dto: MovieListParams) -> int:
-        stmt = (
-            select(func.count())
-            .select_from(MovieTable)
-            .where(MovieTable.deleted_at.is_(None))
-        )
-        return await self.__session.scalar(stmt) or 0
 
     async def exists_by_id(self, *, input_dto: UUID) -> bool:
         stmt = select(

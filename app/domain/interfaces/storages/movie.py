@@ -20,9 +20,6 @@ class IMovieStorage(Protocol):
     async def get_list(self, *, input_dto: MovieListParams) -> Sequence[Movie]:
         pass
 
-    async def count(self, *, input_dto: MovieListParams) -> int:
-        pass
-
     async def exists_by_id(self, *, input_dto: UUID) -> bool:
         pass
 

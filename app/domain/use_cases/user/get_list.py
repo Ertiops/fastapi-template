@@ -19,6 +19,7 @@ class GetUserListUC(IUseCase[UserListParams, ItemList[User]]):
 
     async def execute(self, *, input_dto: UserListParams) -> ItemList[User]:
         async with self._uow:
-            total = await self._user_storage.count(input_dto=input_dto)
-            items = await self._user_storage.get_list(input_dto=input_dto)
-        return ItemList(total=total, items=items)
+            rows = await self._user_storage.get_list(input_dto=input_dto)
+        page = rows[: input_dto.limit]
+        next_cursor = page[-1].id if len(rows) > input_dto.limit else None
+        return ItemList(items=page, next_cursor=next_cursor)

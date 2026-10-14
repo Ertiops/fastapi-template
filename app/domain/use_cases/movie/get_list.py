@@ -19,6 +19,7 @@ class GetMovieListUC(IUseCase[MovieListParams, ItemList[Movie]]):
 
     async def execute(self, *, input_dto: MovieListParams) -> ItemList[Movie]:
         async with self._uow:
-            total = await self._movie_storage.count(input_dto=input_dto)
-            items = await self._movie_storage.get_list(input_dto=input_dto)
-        return ItemList(total=total, items=items)
+            rows = await self._movie_storage.get_list(input_dto=input_dto)
+        page = rows[: input_dto.limit]
+        next_cursor = page[-1].id if len(rows) > input_dto.limit else None
+        return ItemList(items=page, next_cursor=next_cursor)

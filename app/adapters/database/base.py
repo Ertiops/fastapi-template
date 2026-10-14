@@ -1,5 +1,5 @@
 from datetime import UTC, datetime
-from uuid import UUID
+from uuid import UUID, uuid7
 
 from sqlalchemy import DateTime, MetaData, text
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
@@ -10,7 +10,6 @@ from sqlalchemy.orm import (
     declared_attr,
     mapped_column,
 )
-from uuid6 import uuid7
 
 convention = {
     "all_column_names": lambda constraint, table: "_".join(

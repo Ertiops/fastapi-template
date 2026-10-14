@@ -1,10 +1,9 @@
 from collections.abc import Awaitable, Callable
 from http import HTTPStatus
-from uuid import UUID
+from uuid import UUID, uuid7
 
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
-from uuid6 import uuid7
 
 from app.adapters.database.tables import UserTable
 from tests.utils.common import now_utc
