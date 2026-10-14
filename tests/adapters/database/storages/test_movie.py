@@ -3,6 +3,7 @@ from uuid import UUID, uuid7
 
 import pytest
 from dirty_equals import IsDatetime, IsUUID
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.adapters.database.storages.movie import MovieStorage
 from app.adapters.database.tables import MovieTable
@@ -221,7 +222,9 @@ async def test__update_by_id__entity_already_exists_exception(
 async def test__delete_by_id(
     movie_storage: MovieStorage,
     create_movie: Callable[..., Awaitable[MovieTable]],
+    session: AsyncSession,
 ) -> None:
     db_movie = await create_movie()
     await movie_storage.delete_by_id(input_dto=db_movie.id)
+    await session.refresh(db_movie, attribute_names=["deleted_at"])
     assert db_movie.deleted_at is not None

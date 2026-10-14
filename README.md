@@ -89,6 +89,12 @@ Any syntactically valid UUID is an acceptable cursor boundary, even when the cor
 
 Cursor pagination does **not** guarantee a transaction-wide snapshot across multiple HTTP requests. On a static data set, repeated traversal has no duplicates or skips; concurrent inserts/deletes may affect later pages.
 
+### Database timestamps
+
+`created_at` and `updated_at` use PostgreSQL `now()` as their `timestamptz` defaults. SQLAlchemy-managed updates set `updated_at` with `onupdate=func.now()`, and soft deletes explicitly set `deleted_at=func.now()`; non-deleted records keep `deleted_at=NULL`. PostgreSQL `now()` is the **transaction start time**, not the commit timestamp. Raw SQL updates bypass SQLAlchemy's `onupdate` unless they set `updated_at` explicitly; no database trigger is installed.
+
+The existing **initial** Alembic schema matches these defaults for newly created databases. No new migration revision or legacy-data conversion is required for this greenfield template.
+
 ## Testing, linting and migrations
 
 ```bash

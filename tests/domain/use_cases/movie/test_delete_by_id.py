@@ -2,6 +2,7 @@ from collections.abc import Awaitable, Callable
 from uuid import uuid7
 
 import pytest
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.adapters.database.tables import MovieTable
 from app.application.exceptions import (
@@ -14,9 +15,11 @@ from tests.utils.common import now_utc
 async def test__delete_by_id(
     delete_movie_by_id_uc: DeleteMovieByIdUC,
     create_movie: Callable[..., Awaitable[MovieTable]],
+    session: AsyncSession,
 ) -> None:
     db_movie = await create_movie()
     await delete_movie_by_id_uc.execute(input_dto=db_movie.id)
+    await session.refresh(db_movie, attribute_names=["deleted_at"])
     assert db_movie.deleted_at is not None
 
 

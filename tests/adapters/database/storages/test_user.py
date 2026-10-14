@@ -3,6 +3,7 @@ from uuid import UUID, uuid7
 
 import pytest
 from dirty_equals import IsDatetime, IsUUID
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.adapters.database.storages.user import UserStorage
 from app.adapters.database.tables import UserTable
@@ -189,9 +190,11 @@ async def test__update_by_id__entity_not_found_exception__deleted(
 async def test__delete_by_id(
     user_storage: UserStorage,
     create_user: Callable[..., Awaitable[UserTable]],
+    session: AsyncSession,
 ) -> None:
     db_user = await create_user()
     await user_storage.delete_by_id(input_dto=db_user.id)
+    await session.refresh(db_user, attribute_names=["deleted_at"])
     assert db_user.deleted_at is not None
 
 

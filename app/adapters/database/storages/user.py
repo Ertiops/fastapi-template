@@ -2,11 +2,10 @@ from collections.abc import Sequence
 from typing import NoReturn
 from uuid import UUID
 
-from sqlalchemy import exists, insert, select, update
+from sqlalchemy import exists, func, insert, select, update
 from sqlalchemy.exc import DBAPIError, IntegrityError, NoResultFound
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.adapters.database.base import now_with_tz
 from app.adapters.database.converters.user import convert_user
 from app.adapters.database.tables import UserTable
 from app.application.exceptions import (
@@ -78,7 +77,7 @@ class UserStorage(IUserStorage):
         stmt = (
             update(UserTable)
             .where(UserTable.id == input_dto)
-            .values(deleted_at=now_with_tz())
+            .values(deleted_at=func.now())
         )
         await self.__session.execute(stmt)
 
