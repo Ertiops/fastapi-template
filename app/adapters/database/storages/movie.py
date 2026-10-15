@@ -1,4 +1,3 @@
-from collections.abc import Sequence
 from typing import NoReturn
 from uuid import UUID
 
@@ -7,12 +6,14 @@ from sqlalchemy.exc import DBAPIError, IntegrityError, NoResultFound
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.adapters.database.converters.movie import convert_movie
+from app.adapters.database.pagination import fetch_uuid_page
 from app.adapters.database.tables import MovieTable
 from app.application.exceptions import (
     EntityAlreadyExistsException,
     EntityNotFoundException,
     StorageException,
 )
+from app.domain.entities.common import ItemList
 from app.domain.entities.movie import (
     CreateMovie,
     Movie,
@@ -42,13 +43,19 @@ class MovieStorage(IMovieStorage):
         result = await self.__session.scalar(stmt)
         return convert_movie(result=result) if result else None
 
-    async def get_list(self, *, input_dto: MovieListParams) -> Sequence[Movie]:
+    async def get_list(self, *, input_dto: MovieListParams) -> ItemList[Movie]:
         stmt = select(MovieTable).where(MovieTable.deleted_at.is_(None))
-        if input_dto.after is not None:
-            stmt = stmt.where(MovieTable.id < input_dto.after)
-        stmt = stmt.order_by(MovieTable.id.desc()).limit(input_dto.limit + 1)
-        result = await self.__session.scalars(stmt)
-        return [convert_movie(result=r) for r in result]
+        rows, next_cursor = await fetch_uuid_page(
+            session=self.__session,
+            statement=stmt,
+            id_column=MovieTable.id,
+            limit=input_dto.limit,
+            after=input_dto.after,
+        )
+        return ItemList(
+            items=[convert_movie(result=row) for row in rows],
+            next_cursor=next_cursor,
+        )
 
     async def exists_by_id(self, *, input_dto: UUID) -> bool:
         stmt = select(

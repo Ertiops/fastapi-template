@@ -11,6 +11,7 @@ from app.application.exceptions import (
     EntityAlreadyExistsException,
     EntityNotFoundException,
 )
+from app.domain.entities.common import ItemList
 from app.domain.entities.user import (
     CreateUser,
     UpdateUser,
@@ -97,8 +98,11 @@ async def test__get_list(
     create_user: Callable[..., Awaitable[UserTable]],
 ) -> None:
     db_users = [await create_user(id=UUID(int=i + 1)) for i in range(3)]
-    users = await user_storage.get_list(input_dto=UserListParams(limit=2))
-    assert [x.id for x in users] == [row.id for row in reversed(db_users)]
+    page = await user_storage.get_list(input_dto=UserListParams(limit=2))
+    assert ([user.id for user in page.items], page.next_cursor) == (
+        [db_users[2].id, db_users[1].id],
+        db_users[1].id,
+    )
 
 
 async def test__get_list__after(
@@ -106,10 +110,13 @@ async def test__get_list__after(
     create_user: Callable[..., Awaitable[UserTable]],
 ) -> None:
     db_users = [await create_user(id=UUID(int=i + 1)) for i in range(3)]
-    users = await user_storage.get_list(
+    page = await user_storage.get_list(
         input_dto=UserListParams(limit=1, after=db_users[-1].id)
     )
-    assert [x.id for x in users] == [db_users[1].id, db_users[0].id]
+    assert ([user.id for user in page.items], page.next_cursor) == (
+        [db_users[1].id],
+        db_users[1].id,
+    )
 
 
 async def test__get_list__deleted(
@@ -118,13 +125,16 @@ async def test__get_list__deleted(
 ) -> None:
     await create_user(id=UUID(int=3), deleted_at=now_utc())
     await create_user(id=UUID(int=2))
-    users = await user_storage.get_list(input_dto=UserListParams(limit=10))
-    assert [x.id for x in users] == [UUID(int=2)]
+    page = await user_storage.get_list(input_dto=UserListParams(limit=10))
+    assert ([user.id for user in page.items], page.next_cursor) == (
+        [UUID(int=2)],
+        None,
+    )
 
 
 async def test__get_list__empty_list(user_storage: UserStorage) -> None:
-    users = await user_storage.get_list(input_dto=UserListParams(limit=10))
-    assert users == []
+    page = await user_storage.get_list(input_dto=UserListParams(limit=10))
+    assert page == ItemList(items=[], next_cursor=None)
 
 
 async def test__exists_by_id(

@@ -11,6 +11,7 @@ from app.application.exceptions import (
     EntityAlreadyExistsException,
     EntityNotFoundException,
 )
+from app.domain.entities.common import ItemList
 from app.domain.entities.movie import (
     CreateMovie,
     Movie,
@@ -102,8 +103,11 @@ async def test__get_list(
     create_movie: Callable[..., Awaitable[MovieTable]],
 ) -> None:
     db_movies = [await create_movie(id=UUID(int=i + 1)) for i in range(3)]
-    movies = await movie_storage.get_list(input_dto=MovieListParams(limit=2))
-    assert [x.id for x in movies] == [row.id for row in reversed(db_movies)]
+    page = await movie_storage.get_list(input_dto=MovieListParams(limit=2))
+    assert ([movie.id for movie in page.items], page.next_cursor) == (
+        [db_movies[2].id, db_movies[1].id],
+        db_movies[1].id,
+    )
 
 
 async def test__get_list__after(
@@ -111,10 +115,13 @@ async def test__get_list__after(
     create_movie: Callable[..., Awaitable[MovieTable]],
 ) -> None:
     db_movies = [await create_movie(id=UUID(int=i + 1)) for i in range(3)]
-    movies = await movie_storage.get_list(
+    page = await movie_storage.get_list(
         input_dto=MovieListParams(limit=1, after=db_movies[-1].id)
     )
-    assert [x.id for x in movies] == [db_movies[1].id, db_movies[0].id]
+    assert ([movie.id for movie in page.items], page.next_cursor) == (
+        [db_movies[1].id],
+        db_movies[1].id,
+    )
 
 
 async def test__get_list__deleted(
@@ -123,13 +130,16 @@ async def test__get_list__deleted(
 ) -> None:
     await create_movie(id=UUID(int=3), deleted_at=now_utc())
     await create_movie(id=UUID(int=2))
-    movies = await movie_storage.get_list(input_dto=MovieListParams(limit=10))
-    assert [x.id for x in movies] == [UUID(int=2)]
+    page = await movie_storage.get_list(input_dto=MovieListParams(limit=10))
+    assert ([movie.id for movie in page.items], page.next_cursor) == (
+        [UUID(int=2)],
+        None,
+    )
 
 
 async def test__get_list__empty_list(movie_storage: MovieStorage) -> None:
-    movies = await movie_storage.get_list(input_dto=MovieListParams(limit=10))
-    assert movies == []
+    page = await movie_storage.get_list(input_dto=MovieListParams(limit=10))
+    assert page == ItemList(items=[], next_cursor=None)
 
 
 async def test__exists_by_id(

@@ -1,4 +1,3 @@
-from collections.abc import Sequence
 from typing import NoReturn
 from uuid import UUID
 
@@ -7,12 +6,14 @@ from sqlalchemy.exc import DBAPIError, IntegrityError, NoResultFound
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.adapters.database.converters.user import convert_user
+from app.adapters.database.pagination import fetch_uuid_page
 from app.adapters.database.tables import UserTable
 from app.application.exceptions import (
     EntityAlreadyExistsException,
     EntityNotFoundException,
     StorageException,
 )
+from app.domain.entities.common import ItemList
 from app.domain.entities.user import (
     CreateUser,
     UpdateUser,
@@ -41,13 +42,19 @@ class UserStorage(IUserStorage):
         result = await self.__session.scalar(stmt)
         return convert_user(result=result) if result else None
 
-    async def get_list(self, *, input_dto: UserListParams) -> Sequence[User]:
+    async def get_list(self, *, input_dto: UserListParams) -> ItemList[User]:
         stmt = select(UserTable).where(UserTable.deleted_at.is_(None))
-        if input_dto.after is not None:
-            stmt = stmt.where(UserTable.id < input_dto.after)
-        stmt = stmt.order_by(UserTable.id.desc()).limit(input_dto.limit + 1)
-        result = await self.__session.scalars(stmt)
-        return [convert_user(result=r) for r in result]
+        rows, next_cursor = await fetch_uuid_page(
+            session=self.__session,
+            statement=stmt,
+            id_column=UserTable.id,
+            limit=input_dto.limit,
+            after=input_dto.after,
+        )
+        return ItemList(
+            items=[convert_user(result=row) for row in rows],
+            next_cursor=next_cursor,
+        )
 
     async def exists_by_id(self, *, input_dto: UUID) -> bool:
         stmt = select(
