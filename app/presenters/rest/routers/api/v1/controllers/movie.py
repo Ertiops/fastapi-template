@@ -68,9 +68,7 @@ async def get_list(
     use_case: FromDishka[GetMovieListUC],
 ) -> MovieListSchema:
     return MovieListSchema.model_validate(
-        await use_case.execute(
-            input_dto=MovieListParams(limit=params.limit, offset=params.offset)
-        )
+        await use_case.execute(input_dto=MovieListParams(**params.model_dump()))
     )
 
 

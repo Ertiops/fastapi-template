@@ -1,83 +1,58 @@
-PROJECT_NAME = app
-TEST_FOLDER_NAME = tests
-TEST_PATH       := ./tests
-TEST_WORKERS    := 8
+PROJECT_NAME := app
+PYTHON_VERSION := 3.14
+UV ?= uv
+UV_RUN := $(UV) run --locked --python $(PYTHON_VERSION)
+TEST_WORKERS ?= 1
+TEST_PATH := tests
+DEV_COMPOSE := docker compose -p fastapi-template-dev -f docker-compose.dev.yaml
 
-DOCKER_FILENAME := docker-compose.dev.yaml
-PYTHON_VERSION = 3.12
+.PHONY: develop clean_dev local local_down local-create-migrations local-apply-migrations test test-ci lint lint-ci ruff mypy format app help
 
+develop: ## Install locked development dependencies without discarding the venv
+	$(UV) sync --locked --python $(PYTHON_VERSION) --dev
+	$(UV_RUN) pre-commit install
 
-
-PIP      := .venv/bin/pip
-UV       := .venv/bin/uv
-RUFF     := $(UV) run .venv/bin/ruff
-MYPY     := $(UV) run .venv/bin/mypy
-PYTEST   := $(UV) run .venv/bin/pytest
-ALEMBIC  := $(UV) run $(PYTHON) -m $(PROJECT_NAME).adapters.database
-COVERAGE := $(UV) run .venv/bin/coverage
-
-clean_dev: ## Remove virtual environment
+clean_dev: ## Explicitly delete the local venv (never a dependency of develop)
 	rm -rf .venv
 
-venv: clean_dev ## Create venv
-	python$(PYTHON_VERSION) -m venv .venv
+local: ## Start only the local PostgreSQL development service
+	$(DEV_COMPOSE) up -d --wait
 
-develop: venv  ## Create venv, install tools & pre-commit
-	$(PIP) install uv
-	$(UV) sync
-	UV_PROJECT_ENVIRONMENT=.venv $(UV) sync --python $(PYTHON_VERSION) --dev
-	$(UV) run pre-commit install
+local_down: ## Stop the local development database without removing its volume
+	$(DEV_COMPOSE) down
 
-local: ## Start local stack (build & recreate)
-	docker compose -f $(DOCKER_FILENAME) up --build --force-recreate --remove-orphans --renew-anon-volumes
+local-create-migrations: ## Generate an Alembic migration (manual action)
+	$(UV_RUN) python -m $(PROJECT_NAME).adapters.database revision --autogenerate
 
-local_down: ## Stop local stack and remove volumes
-	docker compose -f $(DOCKER_FILENAME) down -v
+local-apply-migrations: ## Apply existing database migrations
+	$(UV_RUN) python -m $(PROJECT_NAME).adapters.database upgrade head
 
-local-create-migrations:
-	$(ALEMBIC) revision --autogenerate
+test: ## Run the full test suite with resource-safe parallelism
+	$(UV_RUN) pytest -vx $(TEST_PATH) -vv -n $(TEST_WORKERS)
 
-local-apply-migrations:
-	$(ALEMBIC) upgrade head
+test-ci: ## Full test suite with coverage and JUnit results
+	$(UV_RUN) coverage erase
+	$(UV_RUN) coverage run -m pytest $(TEST_PATH) --junitxml=junit.xml -rs -n $(TEST_WORKERS)
+	$(UV_RUN) coverage combine
+	$(UV_RUN) coverage report
+	$(UV_RUN) coverage xml -o coverage.xml
 
-local-delete-migrations:
-	find $(PROJECT_NAME)/adapters/database/migrations/versions -type f ! -name '__init__.py' -delete
+format: ## Format code explicitly (not part of lint-ci)
+	$(UV_RUN) ruff format .
+	$(UV_RUN) ruff check --fix .
 
-local-recreate-migrations: local-delete-migrations ## Recreate alembic migrations
-	$(ALEMBIC) revision --autogenerate
-	$(ALEMBIC) upgrade head
+ruff: ## Static lint without modifying files
+	$(UV_RUN) ruff check app tests
 
-test: ## Run tests with verbose output and auto-parallelism
-	$(PYTEST) -vx $(TEST_PATH) -vv -n $(TEST_WORKERS)
+mypy: ## Static type checking
+	$(UV_RUN) mypy app
 
-test-ci: ## Run tests with coverage and junit report for CI (GitHub Actions)
-	$(COVERAGE) erase
-	$(COVERAGE) run -m pytest $(TEST_PATH) --junitxml=junit.xml -rs -n $(TEST_WORKERS)
-	$(COVERAGE) combine
-	$(COVERAGE) report
-	$(COVERAGE) xml -o coverage.xml
+lint: format mypy ## Explicitly autoformat then typecheck
 
-format: ## Format code with ruff
-	$(RUFF) format .
-	$(RUFF) check --fix .
+lint-ci: ruff mypy ## Non-mutating validation
 
-ruff: ## Run ruff linter only
-	$(RUFF) check ./$(PROJECT_NAME)
+app: ## Run the real aiomisc/Uvicorn entrypoint
+	$(UV_RUN) python -m $(PROJECT_NAME)
 
-mypy: ## Run mypy type checker
-	$(MYPY) ./$(PROJECT_NAME)
-
-lint: format mypy ## Full lint cycle (format + mypy) - local use only
-
-lint-ci: ## Run linters in CI without formatting
-	@$(MAKE) ruff
-	@$(MAKE) mypy
-
-
-app: ## Start uvicorn in reload mode
-	$(UV) run python -m $(PROJECT_NAME)
-
-
-help: ## Show this help
-	@echo "Available commands:"
-	@grep -E "^[a-zA-Z_-]+:.*##" $(MAKEFILE_LIST) | sed "s/:.*##/ /"
+help: ## Show targets
+	@grep -E '^[a-zA-Z_-]+:.*##' $(MAKEFILE_LIST) | sed 's/:.*##/ /'

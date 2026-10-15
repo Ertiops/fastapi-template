@@ -1,4 +1,5 @@
 from collections.abc import Sequence
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, PositiveInt
 
@@ -14,10 +15,12 @@ class StatusResponseSchema(BaseSchema):
 
 
 class PaginationSchema(BaseSchema):
+    model_config = ConfigDict(from_attributes=True, extra="forbid")
+
     limit: PositiveInt = Field(le=100, default=10)
-    offset: int = Field(ge=0, default=0)
+    after: UUID | None = None
 
 
 class ItemListSchema[ItemType](BaseSchema):
-    total: int
     items: Sequence[ItemType]
+    next_cursor: UUID | None

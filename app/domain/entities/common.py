@@ -1,6 +1,7 @@
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, fields
 from typing import Any
+from uuid import UUID
 
 from app.application.entities import Unset
 
@@ -8,13 +9,13 @@ from app.application.entities import Unset
 @dataclass(frozen=True, kw_only=True, slots=True)
 class Pagination:
     limit: int
-    offset: int
+    after: UUID | None = None
 
 
 @dataclass(kw_only=True, slots=True, frozen=True)
 class ItemList[ItemType]:
-    total: int
     items: Sequence[ItemType]
+    next_cursor: UUID | None
 
 
 @dataclass(frozen=True, kw_only=True, slots=True)

@@ -1,5 +1,5 @@
 default_language_version:
-  python: python3.12
+  python: python3.14
 
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
@@ -22,20 +22,23 @@ repos:
         types: [python]
       - id: trailing-whitespace
 
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.5.7
-    hooks:
-      - id: ruff
-        args: [--fix]
-      - id: ruff-format
-
   - repo: local
     hooks:
+      - id: ruff
+        name: ruff
+        entry: uv run --locked --python 3.14 ruff check --fix
+        language: system
+        types_or: [python, pyi]
+      - id: ruff-format
+        name: ruff-format
+        entry: uv run --locked --python 3.14 ruff format
+        language: system
+        types_or: [python, pyi]
       - id: mypy
         name: mypy
-        entry: mypy ./app/ --config-file ./pyproject.toml
-        language: python
-        language_version: python3.12
+        entry: uv run --locked --python 3.14 mypy app --config-file pyproject.toml
+        language: system
+        types_or: [python, pyi]
         require_serial: true
         pass_filenames: false
 

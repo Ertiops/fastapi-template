@@ -1,8 +1,8 @@
 from collections.abc import Awaitable, Callable
+from uuid import uuid7
 
 import pytest
 from dirty_equals import IsDatetime
-from uuid6 import uuid7
 
 from app.adapters.database.tables import MovieTable
 from app.application.exceptions import (

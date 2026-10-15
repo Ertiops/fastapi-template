@@ -1,7 +1,7 @@
-from datetime import UTC, datetime
-from uuid import UUID
+from datetime import datetime
+from uuid import UUID, uuid7
 
-from sqlalchemy import DateTime, MetaData, text
+from sqlalchemy import DateTime, MetaData, func
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import (
     DeclarativeBase,
@@ -10,7 +10,6 @@ from sqlalchemy.orm import (
     declared_attr,
     mapped_column,
 )
-from uuid6 import uuid7
 
 convention = {
     "all_column_names": lambda constraint, table: "_".join(
@@ -34,16 +33,15 @@ class TimestampedMixin:
     def created_at(cls) -> Mapped[datetime]:
         return mapped_column(
             DateTime(timezone=True),
-            server_default=text("TIMEZONE('utc', now())"),
+            server_default=func.now(),
         )
 
     @declared_attr
     def updated_at(cls) -> Mapped[datetime]:
         return mapped_column(
             DateTime(timezone=True),
-            server_default=text("TIMEZONE('utc', now())"),
-            server_onupdate=text("TIMEZONE('utc', now())"),
-            onupdate=now_with_tz,
+            server_default=func.now(),
+            onupdate=func.now(),
         )
 
     @declared_attr
@@ -63,7 +61,3 @@ class IdentifableMixin:
             primary_key=True,
             default=uuid7,
         )
-
-
-def now_with_tz() -> datetime:
-    return datetime.now(tz=UTC)

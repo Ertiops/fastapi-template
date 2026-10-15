@@ -1,33 +1,30 @@
+# syntax=docker/dockerfile:1.7
+FROM ghcr.io/astral-sh/uv:0.12.22 AS uv-bin
 
-ARG PYTHON_VERSION=3.12
+FROM python:3.14-slim AS builder
+COPY --from=uv-bin /uv /usr/local/bin/uv
 
-FROM python:${PYTHON_VERSION}-slim
+ENV UV_LINK_MODE=copy \
+    UV_COMPILE_BYTECODE=1 \
+    UV_PROJECT_ENVIRONMENT=/app/.venv \
+    UV_NO_CACHE=1
+WORKDIR /app
+COPY pyproject.toml uv.lock ./
+RUN uv sync --locked --no-dev --no-install-project --python /usr/local/bin/python
 
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
+FROM python:3.14-slim AS runtime
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PATH=/app/.venv/bin:$PATH
 
 WORKDIR /app
+RUN groupadd --system --gid 10001 appuser \
+    && useradd --system --uid 10001 --gid appuser --home-dir /nonexistent \
+       --no-create-home --shell /usr/sbin/nologin appuser
 
-ARG UID=10001
-RUN adduser \
-    --disabled-password \
-    --gecos "" \
-    --home "/nonexistent" \
-    --shell "/sbin/nologin" \
-    --no-create-home \
-    --uid "${UID}" \
-    appuser
-
-RUN pip install -U pip poetry && poetry config virtualenvs.create false
-
-RUN --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
-    --mount=type=bind,source=poetry.lock,target=poetry.lock \
-    poetry install --no-interaction --no-ansi --no-dev
+COPY --from=builder --chown=appuser:appuser /app/.venv /app/.venv
+COPY --chown=appuser:appuser app/ /app/app/
 
 USER appuser
-
-ARG PROJECT_NAME=app
-
-COPY ./${PROJECT_NAME} ./${PROJECT_NAME}
-
 EXPOSE 8080
+CMD ["python", "-m", "app"]

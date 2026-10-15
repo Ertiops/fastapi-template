@@ -19,6 +19,4 @@ class GetMovieListUC(IUseCase[MovieListParams, ItemList[Movie]]):
 
     async def execute(self, *, input_dto: MovieListParams) -> ItemList[Movie]:
         async with self._uow:
-            total = await self._movie_storage.count(input_dto=input_dto)
-            items = await self._movie_storage.get_list(input_dto=input_dto)
-        return ItemList(total=total, items=items)
+            return await self._movie_storage.get_list(input_dto=input_dto)

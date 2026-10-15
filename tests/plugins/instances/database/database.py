@@ -26,10 +26,12 @@ from tests.utils.worker import get_worker_schema_name
 
 @pytest.fixture(scope="session", autouse=True)
 def event_loop():
-    policy = asyncio.get_event_loop_policy()
-    loop = policy.new_event_loop()
-    yield loop
-    loop.close()
+    """Share one event loop across session-scoped async database fixtures."""
+    loop = asyncio.new_event_loop()
+    try:
+        yield loop
+    finally:
+        loop.close()
 
 
 @pytest.fixture(scope="session")

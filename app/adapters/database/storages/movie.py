@@ -1,4 +1,3 @@
-from collections.abc import Sequence
 from typing import NoReturn
 from uuid import UUID
 
@@ -6,14 +5,15 @@ from sqlalchemy import exists, func, insert, select, update
 from sqlalchemy.exc import DBAPIError, IntegrityError, NoResultFound
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.adapters.database.base import now_with_tz
 from app.adapters.database.converters.movie import convert_movie
+from app.adapters.database.pagination import fetch_uuid_page
 from app.adapters.database.tables import MovieTable
 from app.application.exceptions import (
     EntityAlreadyExistsException,
     EntityNotFoundException,
     StorageException,
 )
+from app.domain.entities.common import ItemList
 from app.domain.entities.movie import (
     CreateMovie,
     Movie,
@@ -43,24 +43,19 @@ class MovieStorage(IMovieStorage):
         result = await self.__session.scalar(stmt)
         return convert_movie(result=result) if result else None
 
-    async def get_list(self, *, input_dto: MovieListParams) -> Sequence[Movie]:
-        stmt = (
-            select(MovieTable)
-            .where(MovieTable.deleted_at.is_(None))
-            .limit(input_dto.limit)
-            .offset(input_dto.offset)
-            .order_by(MovieTable.id)
+    async def get_list(self, *, input_dto: MovieListParams) -> ItemList[Movie]:
+        stmt = select(MovieTable).where(MovieTable.deleted_at.is_(None))
+        rows, next_cursor = await fetch_uuid_page(
+            session=self.__session,
+            statement=stmt,
+            id_column=MovieTable.id,
+            limit=input_dto.limit,
+            after=input_dto.after,
         )
-        result = await self.__session.scalars(stmt)
-        return [convert_movie(result=r) for r in result]
-
-    async def count(self, *, input_dto: MovieListParams) -> int:
-        stmt = (
-            select(func.count())
-            .select_from(MovieTable)
-            .where(MovieTable.deleted_at.is_(None))
+        return ItemList(
+            items=[convert_movie(result=row) for row in rows],
+            next_cursor=next_cursor,
         )
-        return await self.__session.scalar(stmt) or 0
 
     async def exists_by_id(self, *, input_dto: UUID) -> bool:
         stmt = select(
@@ -90,7 +85,7 @@ class MovieStorage(IMovieStorage):
         stmt = (
             update(MovieTable)
             .where(MovieTable.id == input_dto)
-            .values(deleted_at=now_with_tz())
+            .values(deleted_at=func.now())
         )
         await self.__session.execute(stmt)
 

@@ -1,9 +1,9 @@
 from collections.abc import Awaitable, Callable
-from uuid import UUID
+from uuid import UUID, uuid7
 
 import pytest
 from dirty_equals import IsDatetime, IsUUID
-from uuid6 import uuid7
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.adapters.database.storages.movie import MovieStorage
 from app.adapters.database.tables import MovieTable
@@ -11,6 +11,7 @@ from app.application.exceptions import (
     EntityAlreadyExistsException,
     EntityNotFoundException,
 )
+from app.domain.entities.common import ItemList
 from app.domain.entities.movie import (
     CreateMovie,
     Movie,
@@ -101,94 +102,44 @@ async def test__get_list(
     movie_storage: MovieStorage,
     create_movie: Callable[..., Awaitable[MovieTable]],
 ) -> None:
-    db_movies = [await create_movie(id=UUID(int=i + 1)) for i in range(2)]
-    movies = await movie_storage.get_list(input_dto=MovieListParams(limit=10, offset=0))
-    assert movies == [
-        Movie(
-            id=db_movie.id,
-            title=db_movie.title,
-            description=db_movie.description,
-            year=db_movie.year,
-            director=db_movie.director,
-            genre=db_movie.genre,
-            duration_minutes=db_movie.duration_minutes,
-            rating=db_movie.rating,
-            created_at=db_movie.created_at,
-            updated_at=db_movie.updated_at,
-        )
-        for db_movie in db_movies
-    ]
-
-
-async def test__get_list__validate_limit(
-    movie_storage: MovieStorage,
-    create_movie: Callable[..., Awaitable[MovieTable]],
-) -> None:
-    db_movies = [await create_movie(id=UUID(int=i + 1)) for i in range(2)]
-    assert await movie_storage.get_list(
-        input_dto=MovieListParams(limit=1, offset=0)
-    ) == [
-        Movie(
-            id=db_movies[0].id,
-            title=db_movies[0].title,
-            description=db_movies[0].description,
-            year=db_movies[0].year,
-            director=db_movies[0].director,
-            genre=db_movies[0].genre,
-            duration_minutes=db_movies[0].duration_minutes,
-            rating=db_movies[0].rating,
-            created_at=db_movies[0].created_at,
-            updated_at=db_movies[0].updated_at,
-        )
-    ]
-
-
-async def test__get_list__validate_offset(
-    movie_storage: MovieStorage,
-    create_movie: Callable[..., Awaitable[MovieTable]],
-) -> None:
-    db_movies: list[MovieTable] = [
-        await create_movie(id=UUID(int=i + 1)) for i in range(2)
-    ]
-    assert await movie_storage.get_list(
-        input_dto=MovieListParams(limit=2, offset=1)
-    ) == [
-        Movie(
-            id=db_movies[1].id,
-            title=db_movies[1].title,
-            description=db_movies[1].description,
-            year=db_movies[1].year,
-            director=db_movies[1].director,
-            genre=db_movies[1].genre,
-            duration_minutes=db_movies[1].duration_minutes,
-            rating=db_movies[1].rating,
-            created_at=db_movies[1].created_at,
-            updated_at=db_movies[1].updated_at,
-        )
-    ]
-
-
-async def test__get_list__empty_list(
-    movie_storage: MovieStorage,
-) -> None:
-    db_movies = await movie_storage.get_list(
-        input_dto=MovieListParams(limit=10, offset=0)
+    db_movies = [await create_movie(id=UUID(int=i + 1)) for i in range(3)]
+    page = await movie_storage.get_list(input_dto=MovieListParams(limit=2))
+    assert ([movie.id for movie in page.items], page.next_cursor) == (
+        [db_movies[2].id, db_movies[1].id],
+        db_movies[1].id,
     )
-    assert db_movies == []
 
 
-async def test__count(
+async def test__get_list__after(
     movie_storage: MovieStorage,
     create_movie: Callable[..., Awaitable[MovieTable]],
 ) -> None:
-    await create_movie()
-    assert await movie_storage.count(input_dto=MovieListParams(limit=10, offset=0)) == 1
+    db_movies = [await create_movie(id=UUID(int=i + 1)) for i in range(3)]
+    page = await movie_storage.get_list(
+        input_dto=MovieListParams(limit=1, after=db_movies[-1].id)
+    )
+    assert ([movie.id for movie in page.items], page.next_cursor) == (
+        [db_movies[1].id],
+        db_movies[1].id,
+    )
 
 
-async def test__count__zero(
+async def test__get_list__deleted(
     movie_storage: MovieStorage,
+    create_movie: Callable[..., Awaitable[MovieTable]],
 ) -> None:
-    assert await movie_storage.count(input_dto=MovieListParams(limit=10, offset=0)) == 0
+    await create_movie(id=UUID(int=3), deleted_at=now_utc())
+    await create_movie(id=UUID(int=2))
+    page = await movie_storage.get_list(input_dto=MovieListParams(limit=10))
+    assert ([movie.id for movie in page.items], page.next_cursor) == (
+        [UUID(int=2)],
+        None,
+    )
+
+
+async def test__get_list__empty_list(movie_storage: MovieStorage) -> None:
+    page = await movie_storage.get_list(input_dto=MovieListParams(limit=10))
+    assert page == ItemList(items=[], next_cursor=None)
 
 
 async def test__exists_by_id(
@@ -281,7 +232,9 @@ async def test__update_by_id__entity_already_exists_exception(
 async def test__delete_by_id(
     movie_storage: MovieStorage,
     create_movie: Callable[..., Awaitable[MovieTable]],
+    session: AsyncSession,
 ) -> None:
     db_movie = await create_movie()
     await movie_storage.delete_by_id(input_dto=db_movie.id)
+    await session.refresh(db_movie, attribute_names=["deleted_at"])
     assert db_movie.deleted_at is not None

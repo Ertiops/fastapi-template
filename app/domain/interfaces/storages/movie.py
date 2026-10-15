@@ -1,7 +1,7 @@
-from collections.abc import Sequence
 from typing import Protocol
 from uuid import UUID
 
+from app.domain.entities.common import ItemList
 from app.domain.entities.movie import (
     CreateMovie,
     Movie,
@@ -17,10 +17,7 @@ class IMovieStorage(Protocol):
     async def get_by_id(self, *, input_dto: UUID) -> Movie | None:
         pass
 
-    async def get_list(self, *, input_dto: MovieListParams) -> Sequence[Movie]:
-        pass
-
-    async def count(self, *, input_dto: MovieListParams) -> int:
+    async def get_list(self, *, input_dto: MovieListParams) -> ItemList[Movie]:
         pass
 
     async def exists_by_id(self, *, input_dto: UUID) -> bool:
